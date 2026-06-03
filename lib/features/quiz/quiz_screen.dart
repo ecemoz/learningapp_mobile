@@ -220,6 +220,8 @@ class _QuizScreenState extends State<QuizScreen> {
                               }
 
                               setState(() => _submitting = true);
+                              final navigator = Navigator.of(context);
+                              final scaffoldMessenger = ScaffoldMessenger.of(context);
                               try {
                                 final outcome = await context.read<AppState>().submitQuiz(
                                   topic: widget.topic,
@@ -227,14 +229,14 @@ class _QuizScreenState extends State<QuizScreen> {
                                 );
 
                                 if (mounted) {
-                                  Navigator.of(context).pushReplacement(
+                                  navigator.pushReplacement(
                                     MaterialPageRoute<void>(
                                       builder: (_) => QuizResultScreen(outcome: outcome),
                                     ),
                                   );
                                 }
                               } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                scaffoldMessenger.showSnackBar(
                                   SnackBar(
                                     content: Text('Failed to submit quiz: $e'),
                                   ),

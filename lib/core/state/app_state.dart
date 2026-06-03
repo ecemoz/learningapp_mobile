@@ -245,6 +245,18 @@ class AppState extends ChangeNotifier {
       final correctAnswers = result['correctCount'] as int? ?? 0;
       final totalQuestions = result['totalQuestionCount'] as int? ?? topic.quizQuestions.length;
 
+      final qResultsList = result['questionResults'] as List? ?? [];
+      final Map<String, bool> questionResults = {};
+      final Map<String, String> correctOptionIds = {};
+
+      for (final r in qResultsList) {
+        final qId = r['questionId'] as String;
+        final isCorrect = r['isCorrect'] as bool;
+        final correctOptId = r['correctOptionId'] as String;
+        questionResults[qId] = isCorrect;
+        correctOptionIds[qId] = correctOptId;
+      }
+
       _quizScores[topic.id] = correctAnswers;
 
       // Sync achievements
@@ -257,14 +269,24 @@ class AppState extends ChangeNotifier {
         totalQuestions: totalQuestions,
         answers: answers,
         newlyUnlocked: newlyUnlocked,
+        questionResults: questionResults,
+        correctOptionIds: correctOptionIds,
       );
     } catch (e) {
       // Local fallback
       var correctAnswers = 0;
+      final Map<String, bool> questionResults = {};
+      final Map<String, String> correctOptionIds = {};
+
       for (final question in topic.quizQuestions) {
         final selected = answers[question.id];
-        if (selected == question.correctIndex) {
+        final isCorrect = selected == question.correctIndex;
+        if (isCorrect) {
           correctAnswers += 1;
+        }
+        questionResults[question.id] = isCorrect;
+        if (question.optionIds != null && question.correctIndex < question.optionIds!.length) {
+          correctOptionIds[question.id] = question.optionIds![question.correctIndex];
         }
       }
 
@@ -283,6 +305,8 @@ class AppState extends ChangeNotifier {
         totalQuestions: topic.quizQuestions.length,
         answers: answers,
         newlyUnlocked: unlocked,
+        questionResults: questionResults,
+        correctOptionIds: correctOptionIds,
       );
     }
   }
@@ -394,6 +418,10 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       rethrow;
     }
+  }
+
+  Future<String> explainQuestion(String questionText, String selectedOptionText) async {
+    return _apiService.explainQuestion(questionText, selectedOptionText);
   }
 
   Future<List<AchievementDefinition>> syncAchievements() async {

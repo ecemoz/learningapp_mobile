@@ -165,6 +165,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                             enabled: !isCompleted,
                             onPressed: () async {
                               setState(() => _completing = true);
+                              final scaffoldMessenger = ScaffoldMessenger.of(context);
                               try {
                                 final unlocked = await appState.markLessonCompleted(
                                   topic: topic,
@@ -172,7 +173,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                 );
                                 setState(() => _showSuccess = true);
 
-                                if (unlocked.isNotEmpty && mounted) {
+                                if (unlocked.isNotEmpty && context.mounted) {
                                   showDialog<void>(
                                     context: context,
                                     builder: (context) {
@@ -218,7 +219,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                                   );
                                 }
                               } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                scaffoldMessenger.showSnackBar(
                                   SnackBar(
                                     content: Text('Failed to complete chapter: $e'),
                                   ),

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_app/features/ai_insights/presentation/providers/ai_insights_providers.dart';
 import 'package:mobile_app/features/ai_insights/presentation/widgets/glowing_ai_container.dart';
+import 'package:provider/provider.dart' as provider;
+import 'package:mobile_app/core/state/app_state.dart';
+import 'package:mobile_app/features/topics/topic_detail_screen.dart';
 
 class AiRecommendationCard extends ConsumerWidget {
   const AiRecommendationCard({super.key, required this.userId});
@@ -90,7 +93,17 @@ class AiRecommendationCard extends ConsumerWidget {
                   const Spacer(),
                   ElevatedButton(
                     onPressed: () {
-                      // Action to start the topic
+                      final appState = provider.Provider.of<AppState>(context, listen: false);
+                      final matched = appState.topics.where(
+                        (t) => t.title.toLowerCase().contains(recommendation.title.toLowerCase()) ||
+                               recommendation.title.toLowerCase().contains(t.title.toLowerCase()),
+                      );
+                      final targetTopic = matched.isNotEmpty ? matched.first : appState.topics.first;
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => TopicDetailScreen(topic: targetTopic),
+                        ),
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFD18E15),
@@ -131,37 +144,35 @@ class _AiRecommendationShimmer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.7),
+        color: Colors.white.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFFDECB5), width: 1.5),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(width: 24, height: 24, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFF5E6C8))),
-              const SizedBox(width: 8),
-              Container(width: 120, height: 16, decoration: BoxDecoration(color: const Color(0xFFF5E6C8), borderRadius: BorderRadius.circular(8))),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(width: 200, height: 24, decoration: BoxDecoration(color: const Color(0xFFF5E6C8), borderRadius: BorderRadius.circular(8))),
-          const SizedBox(height: 8),
-          Container(width: double.infinity, height: 14, decoration: BoxDecoration(color: const Color(0xFFF5E6C8), borderRadius: BorderRadius.circular(8))),
-          const SizedBox(height: 4),
-          Container(width: 150, height: 14, decoration: BoxDecoration(color: const Color(0xFFF5E6C8), borderRadius: BorderRadius.circular(8))),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(width: 80, height: 28, decoration: BoxDecoration(color: const Color(0xFFF5E6C8), borderRadius: BorderRadius.circular(8))),
-              Container(width: 120, height: 40, decoration: BoxDecoration(color: const Color(0xFFF5E6C8), borderRadius: BorderRadius.circular(16))),
-            ],
-          ),
-        ],
+      child: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD18E15)),
+              ),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Gelecek kehanetleri fısıldanıyor... 💫',
+              style: TextStyle(
+                color: Color(0xFF8B7E6A),
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -183,16 +194,32 @@ class _AiRecommendationError extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.error_outline_rounded, color: Color(0xFFD18E15), size: 32),
+          const Icon(Icons.auto_awesome_rounded, color: Color(0xFFD18E15), size: 32),
           const SizedBox(height: 8),
           Text(
-            'The Oracle is currently resting.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: const Color(0xFF8B7E6A)),
+            'Keşfedilecek yeni bir kehanet yok ✨',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: const Color(0xFF5D4830),
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Kâhin şu anda dinleniyor. Yolculuğuna yeni dersler ve sınavlar tamamlayarak devam et, yakında yeni bir kehanet belirecektir!',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF8B7E6A),
+                  height: 1.4,
+                ),
           ),
           const SizedBox(height: 12),
-          TextButton(
+          TextButton.icon(
             onPressed: onRetry,
-            child: const Text('Consult Again', style: TextStyle(color: Color(0xFFB07100))),
+            icon: const Icon(Icons.refresh_rounded, size: 18, color: Color(0xFFB07100)),
+            label: const Text(
+              'Kehanetleri Yenile',
+              style: TextStyle(color: Color(0xFFB07100), fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),

@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:mobile_app/core/models/app_models.dart';
 
@@ -265,6 +265,37 @@ class ApiService {
     } else {
       final msg = _parseErrorMessage(response);
       throw Exception(msg);
+    }
+  }
+
+  Future<String> explainQuestion(String questionText, String selectedOptionText) async {
+    debugPrint('[explainQuestion] Request URL: $baseUrl/api/quiz/explain-question');
+    debugPrint('[explainQuestion] Request Headers: $_headers');
+    debugPrint('[explainQuestion] Request Body: questionText="$questionText", selectedOptionText="$selectedOptionText"');
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/quiz/explain-question'),
+        headers: _headers,
+        body: jsonEncode({
+          'questionText': questionText,
+          'selectedOptionText': selectedOptionText,
+        }),
+      );
+
+      debugPrint('[explainQuestion] Response Status: ${response.statusCode}');
+      debugPrint('[explainQuestion] Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['explanation'] as String? ?? '';
+      } else {
+        final msg = _parseErrorMessage(response);
+        throw Exception(msg);
+      }
+    } catch (e, stack) {
+      debugPrint('[explainQuestion] Exception caught: $e');
+      debugPrint(stack.toString());
+      rethrow;
     }
   }
 
