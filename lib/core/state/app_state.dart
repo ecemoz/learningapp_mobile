@@ -1,6 +1,8 @@
 import 'dart:async';
-
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:mobile_app/core/data/api_service.dart';
 import 'package:mobile_app/core/data/mock_repository.dart';
 import 'package:mobile_app/core/models/app_models.dart';
 
@@ -10,6 +12,10 @@ class AppState extends ChangeNotifier {
   AppState() {
     unawaited(_runStartup());
   }
+
+  final ApiService _apiService = ApiService();
+  final List<Topic> _topics = [];
+  final Map<String, String> _topicQuizId = {};
 
   bool _splashDone = false;
   bool _hasSeenOnboarding = false;
@@ -35,7 +41,7 @@ class AppState extends ChangeNotifier {
   }
 
   List<Topic> get topics {
-    final sorted = [...MockRepository.topics];
+    final sorted = [..._topics.isEmpty ? MockRepository.topics : _topics];
     sorted.sort((a, b) => a.order.compareTo(b.order));
     return sorted;
   }
@@ -154,80 +160,288 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void signIn({
+  Future<void> signIn({
     required String email,
     required String password,
     required bool rememberMe,
-  }) {
-    final suggestedName = _nameFromEmail(email);
-    _hasSeenOnboarding = true;
-    _currentUser = AppUser(
-      fullName: suggestedName,
-      email: email.trim(),
-      role: 'Student',
-    );
-    notifyListeners();
+  }) async {
+    try {
+      _currentUser = await _apiService.login(email, password);
+      _hasSeenOnboarding = true;
+      await syncAchievements();
+      notifyListeners();
+    } catch (e) {
+      rethrow;
+    }
   }
 
-  void register({
+  Future<void> register({
     required String fullName,
     required String email,
     required String password,
-  }) {
-    _hasSeenOnboarding = true;
-    _currentUser = AppUser(
-      fullName: fullName.trim(),
-      email: email.trim(),
-      role: 'Student',
-    );
-    notifyListeners();
+  }) async {
+    try {
+      _currentUser = await _apiService.register(fullName, email, password);
+      _hasSeenOnboarding = true;
+      await syncAchievements();
+      notifyListeners();
+    } catch (e) {
+      rethrow;
+    }
   }
 
   void signOut() {
     _currentUser = null;
+    _apiService.setToken(null);
     notifyListeners();
   }
 
-  List<AchievementDefinition> markLessonCompleted({
+  Future<List<AchievementDefinition>> markLessonCompleted({
     required Topic topic,
     required Lesson lesson,
-  }) {
+  }) async {
     if (_completedLessonIds.contains(lesson.id)) return const [];
 
-    _completedLessonIds.add(lesson.id);
-    final unlocked = _evaluateAchievements(topic: topic, completedQuiz: false);
-    notifyListeners();
-    return unlocked;
+    try {
+      await _apiService.completeLesson(lesson.id);
+      _completedLessonIds.add(lesson.id);
+      final newlyUnlocked = await syncAchievements();
+      notifyListeners();
+      return newlyUnlocked;
+    } catch (e) {
+      // Fallback locally
+      _completedLessonIds.add(lesson.id);
+      final unlocked = _evaluateAchievements(topic: topic, completedQuiz: false);
+      notifyListeners();
+      return unlocked;
+    }
   }
 
-  QuizOutcome submitQuiz({
+  Future<QuizOutcome> submitQuiz({
     required Topic topic,
     required Map<String, int> answers,
-  }) {
-    var correctAnswers = 0;
-    for (final question in topic.quizQuestions) {
-      final selected = answers[question.id];
-      if (selected == question.correctIndex) {
-        correctAnswers += 1;
+  }) async {
+    try {
+      final quizId = _topicQuizId[topic.id];
+      if (quizId == null) {
+        throw Exception("Quiz ID not found for topic ${topic.id}");
       }
+
+      final List<Map<String, String>> submitAnswers = [];
+      for (final question in topic.quizQuestions) {
+        final selectedIndex = answers[question.id];
+        if (selectedIndex != null &&
+            question.optionIds != null &&
+            selectedIndex < question.optionIds!.length) {
+          final optionId = question.optionIds![selectedIndex];
+          submitAnswers.add({
+            'questionId': question.id,
+            'selectedOptionId': optionId,
+          });
+        }
+      }
+
+      final result = await _apiService.submitQuiz(quizId, submitAnswers);
+      final correctAnswers = result['correctCount'] as int? ?? 0;
+      final totalQuestions = result['totalQuestionCount'] as int? ?? topic.quizQuestions.length;
+
+      _quizScores[topic.id] = correctAnswers;
+
+      // Sync achievements
+      final newlyUnlocked = await syncAchievements();
+      notifyListeners();
+
+      return QuizOutcome(
+        topic: topic,
+        correctAnswers: correctAnswers,
+        totalQuestions: totalQuestions,
+        answers: answers,
+        newlyUnlocked: newlyUnlocked,
+      );
+    } catch (e) {
+      // Local fallback
+      var correctAnswers = 0;
+      for (final question in topic.quizQuestions) {
+        final selected = answers[question.id];
+        if (selected == question.correctIndex) {
+          correctAnswers += 1;
+        }
+      }
+
+      _quizScores[topic.id] = correctAnswers;
+      final unlocked = _evaluateAchievements(
+        topic: topic,
+        completedQuiz: true,
+        correctAnswers: correctAnswers,
+        totalQuestions: topic.quizQuestions.length,
+      );
+
+      notifyListeners();
+      return QuizOutcome(
+        topic: topic,
+        correctAnswers: correctAnswers,
+        totalQuestions: topic.quizQuestions.length,
+        answers: answers,
+        newlyUnlocked: unlocked,
+      );
     }
+  }
 
-    _quizScores[topic.id] = correctAnswers;
-    final unlocked = _evaluateAchievements(
-      topic: topic,
-      completedQuiz: true,
-      correctAnswers: correctAnswers,
-      totalQuestions: topic.quizQuestions.length,
-    );
+  Future<List<Topic>> loadTopicsFromBackend() async {
+    try {
+      final list = await _apiService.getTopics();
+      _topics.clear();
+      _topics.addAll(list);
+      notifyListeners();
+      return list;
+    } catch (e) {
+      rethrow;
+    }
+  }
 
-    notifyListeners();
-    return QuizOutcome(
-      topic: topic,
-      correctAnswers: correctAnswers,
-      totalQuestions: topic.quizQuestions.length,
-      answers: answers,
-      newlyUnlocked: unlocked,
-    );
+  Future<List<Lesson>> loadLessonsForTopic(String topicId) async {
+    try {
+      final lessons = await _apiService.getLessons(topicId);
+      final index = _topics.indexWhere((t) => t.id == topicId);
+      if (index != -1) {
+        final oldTopic = _topics[index];
+        _topics[index] = Topic(
+          id: oldTopic.id,
+          title: oldTopic.title,
+          description: oldTopic.description,
+          shortDescription: oldTopic.shortDescription,
+          category: oldTopic.category,
+          difficulty: oldTopic.difficulty,
+          order: oldTopic.order,
+          estimatedLessonCount: oldTopic.estimatedLessonCount,
+          iconKey: oldTopic.iconKey,
+          illustrationHint: oldTopic.illustrationHint,
+          categoryColorHex: oldTopic.categoryColorHex,
+          lessons: List<Lesson>.unmodifiable(lessons),
+          quizQuestions: oldTopic.quizQuestions,
+        );
+      }
+      notifyListeners();
+      return lessons;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<Lesson> loadLessonDetail(String lessonId) async {
+    try {
+      final detail = await _apiService.getLessonById(lessonId);
+      for (var i = 0; i < _topics.length; i++) {
+        final topic = _topics[i];
+        final lessonIndex = topic.lessons.indexWhere((l) => l.id == lessonId);
+        if (lessonIndex != -1) {
+          final updatedLessons = List<Lesson>.from(topic.lessons);
+          updatedLessons[lessonIndex] = detail;
+          _topics[i] = Topic(
+            id: topic.id,
+            title: topic.title,
+            description: topic.description,
+            shortDescription: topic.shortDescription,
+            category: topic.category,
+            difficulty: topic.difficulty,
+            order: topic.order,
+            estimatedLessonCount: topic.estimatedLessonCount,
+            iconKey: topic.iconKey,
+            illustrationHint: topic.illustrationHint,
+            categoryColorHex: topic.categoryColorHex,
+            lessons: List<Lesson>.unmodifiable(updatedLessons),
+            quizQuestions: topic.quizQuestions,
+          );
+          break;
+        }
+      }
+      notifyListeners();
+      return detail;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<List<QuizQuestion>> loadQuizForTopic(String topicId) async {
+    try {
+      final data = await _apiService.getQuiz(topicId);
+      final quizId = data['quizId'] as String;
+      final List<QuizQuestion> questions = data['questions'] as List<QuizQuestion>;
+
+      _topicQuizId[topicId] = quizId;
+
+      final index = _topics.indexWhere((t) => t.id == topicId);
+      if (index != -1) {
+        final oldTopic = _topics[index];
+        _topics[index] = Topic(
+          id: oldTopic.id,
+          title: oldTopic.title,
+          description: oldTopic.description,
+          shortDescription: oldTopic.shortDescription,
+          category: oldTopic.category,
+          difficulty: oldTopic.difficulty,
+          order: oldTopic.order,
+          estimatedLessonCount: oldTopic.estimatedLessonCount,
+          iconKey: oldTopic.iconKey,
+          illustrationHint: oldTopic.illustrationHint,
+          categoryColorHex: oldTopic.categoryColorHex,
+          lessons: oldTopic.lessons,
+          quizQuestions: List<QuizQuestion>.unmodifiable(questions),
+        );
+      }
+      notifyListeners();
+      return questions;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<List<AchievementDefinition>> syncAchievements() async {
+    try {
+      final rawList = await _apiService.getMyAchievements();
+      final newlyUnlocked = <AchievementDefinition>[];
+
+      for (final raw in rawList) {
+        final code = raw['code'] as String? ?? '';
+        final earnedAtStr = raw['earnedAt'] as String?;
+        if (code.isNotEmpty && earnedAtStr != null) {
+          final earnedAt = DateTime.tryParse(earnedAtStr) ?? DateTime.now();
+
+          if (!_achievementUnlockedAt.containsKey(code)) {
+            final defIndex = MockRepository.achievementDefinitions.indexWhere((d) => d.id == code);
+            if (defIndex != -1) {
+              newlyUnlocked.add(MockRepository.achievementDefinitions[defIndex]);
+            }
+          }
+
+          _achievementUnlockedAt[code] = earnedAt;
+        }
+      }
+
+      // Proactively sync completed lesson count
+      try {
+        final summaryResponse = await http.get(
+          Uri.parse('${_apiService.baseUrl}/api/progress/summary'),
+          headers: _apiService.headers,
+        );
+        if (summaryResponse.statusCode == 200) {
+          final summary = jsonDecode(summaryResponse.body);
+          // Set completions size locally to align progress rings
+          final count = summary['completedLessons'] as int? ?? 0;
+          if (count > _completedLessonIds.length) {
+            // Add filler mock IDs to represent completions if we don't know the exact IDs
+            // This ensures overall progress ring displays the correct count fetched from backend
+            for (var i = _completedLessonIds.length; i < count; i++) {
+              _completedLessonIds.add('__sync_filler_$i');
+            }
+          }
+        }
+      } catch (_) {}
+
+      return newlyUnlocked;
+    } catch (e) {
+      return const [];
+    }
   }
 
   int? bestQuizScoreForTopic(String topicId) => _quizScores[topicId];
@@ -373,22 +587,5 @@ class AppState extends ChangeNotifier {
 
     _achievementUnlockedAt[achievementId] = DateTime.now();
     unlocked.add(achievement);
-  }
-
-  String _nameFromEmail(String email) {
-    final user = email.split('@').first.trim();
-    if (user.isEmpty) return 'Learner';
-    final parts = user
-        .replaceAll(RegExp(r'[_\-.]+'), ' ')
-        .split(' ')
-        .where((part) => part.isNotEmpty)
-        .toList();
-    final normalized = parts
-        .map(
-          (part) =>
-              '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
-        )
-        .join(' ');
-    return normalized.isEmpty ? 'Learner' : normalized;
   }
 }

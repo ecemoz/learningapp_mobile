@@ -3,7 +3,6 @@ import 'package:mobile_app/core/state/app_state.dart';
 import 'package:mobile_app/core/theme/app_tokens.dart';
 import 'package:mobile_app/core/widgets/app_components.dart';
 import 'package:mobile_app/features/topics/topic_detail_screen.dart';
-import 'package:mobile_app/features/ai_insights/presentation/widgets/ai_recommendation_card.dart';
 import 'package:mobile_app/features/shell/main_shell.dart';
 import 'package:provider/provider.dart';
 

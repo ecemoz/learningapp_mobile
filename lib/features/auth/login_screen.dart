@@ -19,6 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _rememberMe = true;
   bool _hidePassword = true;
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -37,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _handleSignIn() {
+  void _handleSignIn() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
@@ -57,11 +58,23 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    context.read<AppState>().signIn(
-      email: email,
-      password: password,
-      rememberMe: _rememberMe,
-    );
+    setState(() => _loading = true);
+
+    try {
+      await context.read<AppState>().signIn(
+        email: email,
+        password: password,
+        rememberMe: _rememberMe,
+      );
+    } catch (e) {
+      if (mounted) {
+        _showError(e.toString().replaceAll('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   @override
@@ -142,11 +155,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                AppPrimaryButton(
-                  label: 'Enter Realm',
-                  icon: Icons.arrow_forward_rounded,
-                  onPressed: _handleSignIn,
-                ),
+                _loading
+                    ? const AppLoadingState(label: 'Unlocking realm gate...')
+                    : AppPrimaryButton(
+                        label: 'Enter Realm',
+                        icon: Icons.arrow_forward_rounded,
+                        onPressed: _handleSignIn,
+                      ),
                 const SizedBox(height: AppSpacing.md),
                 Center(
                   child: Wrap(

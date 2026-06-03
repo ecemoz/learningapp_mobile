@@ -65,6 +65,7 @@ class QuizQuestion {
     required this.options,
     required this.correctIndex,
     required this.feedback,
+    this.optionIds,
   });
 
   final String id;
@@ -72,6 +73,7 @@ class QuizQuestion {
   final List<String> options;
   final int correctIndex;
   final String feedback;
+  final List<String>? optionIds;
 }
 
 class Topic {

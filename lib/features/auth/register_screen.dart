@@ -22,6 +22,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _agreeToPolicy = true;
   bool _hidePassword = true;
   bool _hideConfirm = true;
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -42,7 +43,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  void _handleSignUp() {
+  void _handleSignUp() async {
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -73,11 +74,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    context.read<AppState>().register(
-      fullName: name,
-      email: email,
-      password: password,
-    );
+    setState(() => _loading = true);
+
+    try {
+      await context.read<AppState>().register(
+        fullName: name,
+        email: email,
+        password: password,
+      );
+    } catch (e) {
+      if (mounted) {
+        _showError(e.toString().replaceAll('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   @override
@@ -169,12 +182,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                AppPrimaryButton(
-                  label: 'Sign Up',
-                  icon: Icons.rocket_launch_rounded,
-                  onPressed: _handleSignUp,
-                  enabled: _agreeToPolicy,
-                ),
+                _loading
+                    ? const AppLoadingState(label: 'Inscribing scroll in the registry...')
+                    : AppPrimaryButton(
+                        label: 'Sign Up',
+                        icon: Icons.rocket_launch_rounded,
+                        onPressed: _handleSignUp,
+                        enabled: _agreeToPolicy,
+                      ),
                 const SizedBox(height: AppSpacing.md),
                 Center(
                   child: Wrap(
