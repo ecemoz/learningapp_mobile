@@ -424,6 +424,10 @@ class AppState extends ChangeNotifier {
     return _apiService.explainQuestion(questionText, selectedOptionText);
   }
 
+  Future<String> getDailyOracle() async {
+    return _apiService.getDailyOracle();
+  }
+
   Future<List<AchievementDefinition>> syncAchievements() async {
     try {
       final rawList = await _apiService.getMyAchievements();

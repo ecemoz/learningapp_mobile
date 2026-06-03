@@ -3,7 +3,6 @@ import 'package:mobile_app/core/state/app_state.dart';
 import 'package:mobile_app/core/theme/app_tokens.dart';
 import 'package:mobile_app/core/widgets/app_components.dart';
 import 'package:mobile_app/features/topics/topic_detail_screen.dart';
-import 'package:mobile_app/features/ai_insights/presentation/widgets/ai_recommendation_card.dart';
 import 'package:mobile_app/features/shell/main_shell.dart';
 import 'package:provider/provider.dart';
 
@@ -182,7 +181,105 @@ class HomeScreen extends StatelessWidget {
                 subtitle: 'AI personalized path for your journey.',
               ),
               const SizedBox(height: AppSpacing.sm),
-              AiRecommendationCard(userId: appState.currentUser?.email ?? 'user_123'),
+              AppPrimaryButton(
+                label: 'Günün Kehanetini Aç 🔮',
+                icon: Icons.auto_awesome_rounded,
+                onPressed: () async {
+                  final navigator = Navigator.of(context);
+                  final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+                  // Show loading popup
+                  showDialog<void>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (dialogContext) => AlertDialog(
+                      backgroundColor: const Color(0xFFFFFDF8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        side: const BorderSide(color: Color(0xFFFDECB5)),
+                      ),
+                      content: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD18E15)),
+                            ),
+                            SizedBox(height: 20),
+                            Text(
+                              'Kâhin kehanet küresine bakıyor... 🔮',
+                              style: TextStyle(color: Color(0xFF5D4830), fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+
+                  try {
+                    final prophecy = await context.read<AppState>().getDailyOracle();
+                    
+                    navigator.pop(); // Close loading popup
+                    
+                    if (context.mounted) {
+                      showDialog<void>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          backgroundColor: const Color(0xFFFFFDF8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            side: const BorderSide(color: Color(0xFFFDECB5)),
+                          ),
+                          title: const Row(
+                            children: [
+                              Icon(Icons.auto_awesome_rounded, color: Color(0xFFD18E15)),
+                              SizedBox(width: 8),
+                              Text(
+                                'Günün Kehaneti 🔮',
+                                style: TextStyle(color: Color(0xFF5D4830), fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(height: 10),
+                              Text(
+                                prophecy,
+                                style: const TextStyle(
+                                  color: Color(0xFF6B5C4A),
+                                  fontSize: 16,
+                                  height: 1.5,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xFFB07100),
+                              ),
+                              child: const Text('Kehaneti Kabul Et ✨', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    navigator.pop(); // Close loading popup
+                    scaffoldMessenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Kehanet küresi bulanıklaştı: $e'),
+                      ),
+                    );
+                  }
+                },
+              ),
               const SizedBox(height: AppSpacing.lg),
               const SectionHeader(
                 title: 'Magical Treasures',

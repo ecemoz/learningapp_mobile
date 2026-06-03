@@ -326,6 +326,32 @@ class ApiService {
     }
   }
 
+  Future<String> getDailyOracle() async {
+    debugPrint('[getDailyOracle] Request URL: $baseUrl/api/ai/daily-oracle');
+    debugPrint('[getDailyOracle] Request Headers: $_headers');
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/ai/daily-oracle'),
+        headers: _headers,
+      );
+
+      debugPrint('[getDailyOracle] Response Status: ${response.statusCode}');
+      debugPrint('[getDailyOracle] Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['oracleText'] as String? ?? '';
+      } else {
+        final msg = _parseErrorMessage(response);
+        throw Exception(msg);
+      }
+    } catch (e, stack) {
+      debugPrint('[getDailyOracle] Exception caught: $e');
+      debugPrint(stack.toString());
+      rethrow;
+    }
+  }
+
   // Helpers
   bool _isLinuxTopic(String title, String description) {
     final t = title.toLowerCase();
