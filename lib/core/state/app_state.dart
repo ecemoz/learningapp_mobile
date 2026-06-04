@@ -16,6 +16,7 @@ class AppState extends ChangeNotifier {
   final ApiService _apiService = ApiService();
   final List<Topic> _topics = [];
   final Map<String, String> _topicQuizId = {};
+  final Map<String, int> _quizAttempts = {};
 
   bool _splashDone = false;
   bool _hasSeenOnboarding = false;
@@ -244,20 +245,22 @@ class AppState extends ChangeNotifier {
       final result = await _apiService.submitQuiz(quizId, submitAnswers);
       final correctAnswers = result['correctCount'] as int? ?? 0;
       final totalQuestions = result['totalQuestionCount'] as int? ?? topic.quizQuestions.length;
+      final attemptCount = result['attemptCount'] as int? ?? 1;
 
       final qResultsList = result['questionResults'] as List? ?? [];
-      final Map<String, bool> questionResults = {};
-      final Map<String, String> correctOptionIds = {};
+      final Map<String, bool?> questionResults = {};
+      final Map<String, String?> correctOptionIds = {};
 
       for (final r in qResultsList) {
         final qId = r['questionId'] as String;
-        final isCorrect = r['isCorrect'] as bool;
-        final correctOptId = r['correctOptionId'] as String;
+        final isCorrect = r['isCorrect'] as bool?;
+        final correctOptId = r['correctOptionId'] as String?;
         questionResults[qId] = isCorrect;
         correctOptionIds[qId] = correctOptId;
       }
 
       _quizScores[topic.id] = correctAnswers;
+      _quizAttempts[topic.id] = attemptCount;
 
       // Sync achievements
       final newlyUnlocked = await syncAchievements();
@@ -271,12 +274,13 @@ class AppState extends ChangeNotifier {
         newlyUnlocked: newlyUnlocked,
         questionResults: questionResults,
         correctOptionIds: correctOptionIds,
+        attemptCount: attemptCount,
       );
     } catch (e) {
       // Local fallback
       var correctAnswers = 0;
-      final Map<String, bool> questionResults = {};
-      final Map<String, String> correctOptionIds = {};
+      final Map<String, bool?> questionResults = {};
+      final Map<String, String?> correctOptionIds = {};
 
       for (final question in topic.quizQuestions) {
         final selected = answers[question.id];
@@ -298,6 +302,10 @@ class AppState extends ChangeNotifier {
         totalQuestions: topic.quizQuestions.length,
       );
 
+      final currentAttempts = _quizAttempts[topic.id] ?? 0;
+      final attemptCount = currentAttempts + 1;
+      _quizAttempts[topic.id] = attemptCount;
+
       notifyListeners();
       return QuizOutcome(
         topic: topic,
@@ -307,6 +315,7 @@ class AppState extends ChangeNotifier {
         newlyUnlocked: unlocked,
         questionResults: questionResults,
         correctOptionIds: correctOptionIds,
+        attemptCount: attemptCount,
       );
     }
   }
@@ -391,8 +400,10 @@ class AppState extends ChangeNotifier {
       final data = await _apiService.getQuiz(topicId);
       final quizId = data['quizId'] as String;
       final List<QuizQuestion> questions = data['questions'] as List<QuizQuestion>;
+      final attemptCount = data['attemptCount'] as int? ?? 0;
 
       _topicQuizId[topicId] = quizId;
+      _quizAttempts[topicId] = attemptCount;
 
       final index = _topics.indexWhere((t) => t.id == topicId);
       if (index != -1) {

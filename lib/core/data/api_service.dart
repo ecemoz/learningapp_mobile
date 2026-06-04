@@ -237,10 +237,13 @@ class ApiService {
         );
       }).toList();
 
+      final attemptCount = data['attemptCount'] as int? ?? 0;
+
       return {
         'quizId': quizId,
         'title': title,
         'questions': questions,
+        'attemptCount': attemptCount,
       };
     } else {
       final msg = _parseErrorMessage(response);

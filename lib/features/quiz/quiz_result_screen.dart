@@ -5,8 +5,6 @@ import 'package:mobile_app/core/theme/app_tokens.dart';
 import 'package:mobile_app/core/widgets/app_components.dart';
 import 'package:mobile_app/core/widgets/fairytale_background.dart';
 import 'package:mobile_app/features/quiz/quiz_screen.dart';
-import 'package:provider/provider.dart';
-import 'package:mobile_app/core/state/app_state.dart';
 import 'package:mobile_app/features/ai_insights/presentation/widgets/glowing_ai_container.dart';
 
 class QuizResultScreen extends StatefulWidget {
@@ -117,15 +115,17 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          const SectionHeader(
-            title: 'Enigma Reflections',
-            subtitle: 'Review your mastery of the realm.',
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          RealQuizFeedbackList(
-            outcome: outcome,
-          ),
+          if (outcome.attemptCount >= 2) ...[
+            const SizedBox(height: AppSpacing.md),
+            const SectionHeader(
+              title: 'Enigma Reflections',
+              subtitle: 'Review your mastery of the realm.',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            RealQuizFeedbackList(
+              outcome: outcome,
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           AppPrimaryButton(
             label: outcome.isPassed ? 'Continue Journey' : 'Face Trial Again',
@@ -195,7 +195,7 @@ class RealQuizFeedbackList extends StatelessWidget {
         final selectedIndex = outcome.answers[question.id];
         final selectedText = (selectedIndex != null && selectedIndex < question.options.length)
             ? question.options[selectedIndex]
-            : 'Yanıt verilmedi';
+            : 'No answer';
 
         final isCorrect = outcome.questionResults?[question.id] ?? false;
 
@@ -221,7 +221,7 @@ class RealQuizFeedbackList extends StatelessWidget {
   }
 }
 
-class RealQuizFeedbackCard extends StatefulWidget {
+class RealQuizFeedbackCard extends StatelessWidget {
   const RealQuizFeedbackCard({
     super.key,
     required this.question,
@@ -236,18 +236,9 @@ class RealQuizFeedbackCard extends StatefulWidget {
   final bool isCorrect;
 
   @override
-  State<RealQuizFeedbackCard> createState() => _RealQuizFeedbackCardState();
-}
-
-class _RealQuizFeedbackCardState extends State<RealQuizFeedbackCard> {
-  String? _explanation;
-  bool _loading = false;
-  String? _error;
-
-  @override
   Widget build(BuildContext context) {
     return GlowingAiContainer(
-      isCorrect: widget.isCorrect,
+      isCorrect: isCorrect,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -258,21 +249,21 @@ class _RealQuizFeedbackCardState extends State<RealQuizFeedbackCard> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: widget.isCorrect
+                  color: isCorrect
                       ? const Color(0xFFE8F5E9)
                       : const Color(0xFFFFEBEE),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  widget.isCorrect ? Icons.check_rounded : Icons.close_rounded,
-                  color: widget.isCorrect ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
+                  isCorrect ? Icons.check_rounded : Icons.close_rounded,
+                  color: isCorrect ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
                   size: 20,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  widget.question.prompt,
+                  question.prompt,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: const Color(0xFF4A3C2A),
@@ -284,137 +275,16 @@ class _RealQuizFeedbackCardState extends State<RealQuizFeedbackCard> {
           ),
           const SizedBox(height: 20),
           _RealAnswerRow(
-            label: 'Senin Cevabın',
-            answer: widget.selectedAnswer,
-            isCorrect: widget.isCorrect,
+            label: 'Your Answer',
+            answer: selectedAnswer,
+            isCorrect: isCorrect,
           ),
-          if (!widget.isCorrect) ...[
+          if (!isCorrect) ...[
             const SizedBox(height: 12),
             _RealAnswerRow(
-              label: 'Doğru Cevap',
-              answer: widget.correctAnswer,
+              label: 'Correct Answer',
+              answer: correctAnswer,
               isCorrect: true,
-            ),
-          ],
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Divider(color: Color(0xFFE7DECD), height: 1),
-          ),
-          if (_explanation != null) ...[
-            Row(
-              children: [
-                const Icon(Icons.auto_awesome_rounded, color: Color(0xFFD18E15), size: 16),
-                const SizedBox(width: 8),
-                Text(
-                  'Yapay Zeka Açıklaması ✨',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: const Color(0xFFD18E15),
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFDF8),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFFFE082)),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFFFE082).withValues(alpha: 0.15),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Text(
-                _explanation!,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF6B5C4A),
-                      height: 1.5,
-                    ),
-              ),
-            ),
-          ] else if (_loading) ...[
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(8.0),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD18E15)),
-                  ),
-                ),
-              ),
-            ),
-          ] else if (!widget.isCorrect) ...[
-            if (_error != null) ...[
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Text(
-                  _error!,
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
-              ),
-            ],
-            Center(
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  setState(() {
-                    _loading = true;
-                    _error = null;
-                  });
-                  try {
-                    final response = await context.read<AppState>().explainQuestion(
-                          widget.question.prompt,
-                          widget.selectedAnswer,
-                        );
-                    setState(() {
-                      _explanation = response;
-                    });
-                  } catch (e) {
-                    setState(() {
-                      _error = 'Yapay zekadan açıklama alınamadı. Lütfen tekrar dene.';
-                    });
-                  } finally {
-                    setState(() {
-                      _loading = false;
-                    });
-                  }
-                },
-                icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: Color(0xFFB07100)),
-                label: const Text(
-                  'Yapay Zekaya Sor ✨',
-                  style: TextStyle(color: Color(0xFFB07100), fontWeight: FontWeight.bold),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFFDECB5)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  backgroundColor: const Color(0xFFFFEEBC).withValues(alpha: 0.3),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                ),
-              ),
-            ),
-          ] else ...[
-            Row(
-              children: [
-                const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF2CA56E), size: 16),
-                const SizedBox(width: 8),
-                Text(
-                  'Harika! Doğru cevap.',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: const Color(0xFF2CA56E),
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ],
             ),
           ],
         ],

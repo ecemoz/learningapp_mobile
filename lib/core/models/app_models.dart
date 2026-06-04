@@ -142,6 +142,7 @@ class QuizOutcome {
     required this.newlyUnlocked,
     this.questionResults,
     this.correctOptionIds,
+    required this.attemptCount,
   });
 
   final Topic topic;
@@ -149,8 +150,9 @@ class QuizOutcome {
   final int totalQuestions;
   final Map<String, int> answers;
   final List<AchievementDefinition> newlyUnlocked;
-  final Map<String, bool>? questionResults;
-  final Map<String, String>? correctOptionIds;
+  final Map<String, bool?>? questionResults;
+  final Map<String, String?>? correctOptionIds;
+  final int attemptCount;
 
   bool get isPassed => scorePercent >= 0.6;
 
