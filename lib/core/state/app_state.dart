@@ -222,14 +222,15 @@ class AppState extends ChangeNotifier {
     required Topic topic,
     required Map<String, int> answers,
   }) async {
+    final dbTopic = _topics.firstWhere((t) => t.id == topic.id, orElse: () => topic);
     try {
-      final quizId = _topicQuizId[topic.id];
+      final quizId = _topicQuizId[dbTopic.id];
       if (quizId == null) {
-        throw Exception("Quiz ID not found for topic ${topic.id}");
+        throw Exception("Quiz ID not found for topic ${dbTopic.id}");
       }
 
       final List<Map<String, String>> submitAnswers = [];
-      for (final question in topic.quizQuestions) {
+      for (final question in dbTopic.quizQuestions) {
         final selectedIndex = answers[question.id];
         if (selectedIndex != null &&
             question.optionIds != null &&
@@ -244,7 +245,7 @@ class AppState extends ChangeNotifier {
 
       final result = await _apiService.submitQuiz(quizId, submitAnswers);
       final correctAnswers = result['correctCount'] as int? ?? 0;
-      final totalQuestions = result['totalQuestionCount'] as int? ?? topic.quizQuestions.length;
+      final totalQuestions = result['totalQuestionCount'] as int? ?? dbTopic.quizQuestions.length;
       final attemptCount = result['attemptCount'] as int? ?? 1;
 
       final qResultsList = result['questionResults'] as List? ?? [];
@@ -259,15 +260,16 @@ class AppState extends ChangeNotifier {
         correctOptionIds[qId] = correctOptId;
       }
 
-      _quizScores[topic.id] = correctAnswers;
-      _quizAttempts[topic.id] = attemptCount;
+      _quizScores[dbTopic.id] = correctAnswers;
+      _quizAttempts[dbTopic.id] = attemptCount;
 
       // Sync achievements
       final newlyUnlocked = await syncAchievements();
       notifyListeners();
 
       return QuizOutcome(
-        topic: topic,
+        quizId: quizId,
+        topic: dbTopic,
         correctAnswers: correctAnswers,
         totalQuestions: totalQuestions,
         answers: answers,
@@ -282,7 +284,7 @@ class AppState extends ChangeNotifier {
       final Map<String, bool?> questionResults = {};
       final Map<String, String?> correctOptionIds = {};
 
-      for (final question in topic.quizQuestions) {
+      for (final question in dbTopic.quizQuestions) {
         final selected = answers[question.id];
         final isCorrect = selected == question.correctIndex;
         if (isCorrect) {
@@ -294,23 +296,24 @@ class AppState extends ChangeNotifier {
         }
       }
 
-      _quizScores[topic.id] = correctAnswers;
+      _quizScores[dbTopic.id] = correctAnswers;
       final unlocked = _evaluateAchievements(
-        topic: topic,
+        topic: dbTopic,
         completedQuiz: true,
         correctAnswers: correctAnswers,
-        totalQuestions: topic.quizQuestions.length,
+        totalQuestions: dbTopic.quizQuestions.length,
       );
 
-      final currentAttempts = _quizAttempts[topic.id] ?? 0;
+      final currentAttempts = _quizAttempts[dbTopic.id] ?? 0;
       final attemptCount = currentAttempts + 1;
-      _quizAttempts[topic.id] = attemptCount;
+      _quizAttempts[dbTopic.id] = attemptCount;
 
       notifyListeners();
       return QuizOutcome(
-        topic: topic,
+        quizId: _topicQuizId[dbTopic.id] ?? 'mock-quiz-id',
+        topic: dbTopic,
         correctAnswers: correctAnswers,
-        totalQuestions: topic.quizQuestions.length,
+        totalQuestions: dbTopic.quizQuestions.length,
         answers: answers,
         newlyUnlocked: unlocked,
         questionResults: questionResults,
@@ -431,8 +434,9 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<String> explainQuestion(String questionText, String selectedOptionText) async {
-    return _apiService.explainQuestion(questionText, selectedOptionText);
+
+  Future<String> explainQuestion(String quizId, String questionText, String selectedOptionText) async {
+    return _apiService.explainQuestion(quizId, questionText, selectedOptionText);
   }
 
   Future<String> getDailyOracle() async {

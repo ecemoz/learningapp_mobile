@@ -6,6 +6,8 @@ import 'package:mobile_app/core/widgets/app_components.dart';
 import 'package:mobile_app/core/widgets/fairytale_background.dart';
 import 'package:mobile_app/features/quiz/quiz_screen.dart';
 import 'package:mobile_app/features/ai_insights/presentation/widgets/glowing_ai_container.dart';
+import 'package:provider/provider.dart';
+import 'package:mobile_app/core/state/app_state.dart';
 
 class QuizResultScreen extends StatefulWidget {
   const QuizResultScreen({super.key, required this.outcome});
@@ -115,17 +117,15 @@ class _QuizResultScreenState extends State<QuizResultScreen> {
               ],
             ),
           ),
-          if (outcome.attemptCount >= 2) ...[
-            const SizedBox(height: AppSpacing.md),
-            const SectionHeader(
-              title: 'Enigma Reflections',
-              subtitle: 'Review your mastery of the realm.',
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            RealQuizFeedbackList(
-              outcome: outcome,
-            ),
-          ],
+          const SizedBox(height: AppSpacing.md),
+          const SectionHeader(
+            title: 'Enigma Reflections',
+            subtitle: 'Review your mastery of the realm.',
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          RealQuizFeedbackList(
+            outcome: outcome,
+          ),
           const SizedBox(height: AppSpacing.sm),
           AppPrimaryButton(
             label: outcome.isPassed ? 'Continue Journey' : 'Face Trial Again',
@@ -210,6 +210,7 @@ class RealQuizFeedbackList extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.md),
           child: RealQuizFeedbackCard(
+            quizId: outcome.quizId,
             question: question,
             selectedAnswer: selectedText,
             correctAnswer: correctText,
@@ -221,24 +222,64 @@ class RealQuizFeedbackList extends StatelessWidget {
   }
 }
 
-class RealQuizFeedbackCard extends StatelessWidget {
+class RealQuizFeedbackCard extends StatefulWidget {
   const RealQuizFeedbackCard({
     super.key,
+    required this.quizId,
     required this.question,
     required this.selectedAnswer,
     required this.correctAnswer,
     required this.isCorrect,
   });
 
+  final String quizId;
   final QuizQuestion question;
   final String selectedAnswer;
   final String correctAnswer;
   final bool isCorrect;
 
   @override
+  State<RealQuizFeedbackCard> createState() => _RealQuizFeedbackCardState();
+}
+
+class _RealQuizFeedbackCardState extends State<RealQuizFeedbackCard> {
+  bool _isLoading = false;
+  String? _explanation;
+  String? _errorMessage;
+
+  Future<void> _fetchExplanation() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final appState = context.read<AppState>();
+      final explanation = await appState.explainQuestion(
+        widget.quizId,
+        widget.question.prompt,
+        widget.selectedAnswer,
+      );
+      if (mounted) {
+        setState(() {
+          _explanation = explanation;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception:', '').trim();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return GlowingAiContainer(
-      isCorrect: isCorrect,
+      isCorrect: widget.isCorrect,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,21 +290,21 @@ class RealQuizFeedbackCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: isCorrect
+                  color: widget.isCorrect
                       ? const Color(0xFFE8F5E9)
                       : const Color(0xFFFFEBEE),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  isCorrect ? Icons.check_rounded : Icons.close_rounded,
-                  color: isCorrect ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
+                  widget.isCorrect ? Icons.check_rounded : Icons.close_rounded,
+                  color: widget.isCorrect ? const Color(0xFF4CAF50) : const Color(0xFFE53935),
                   size: 20,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  question.prompt,
+                  widget.question.prompt,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: const Color(0xFF4A3C2A),
@@ -276,16 +317,94 @@ class RealQuizFeedbackCard extends StatelessWidget {
           const SizedBox(height: 20),
           _RealAnswerRow(
             label: 'Your Answer',
-            answer: selectedAnswer,
-            isCorrect: isCorrect,
+            answer: widget.selectedAnswer,
+            isCorrect: widget.isCorrect,
           ),
-          if (!isCorrect) ...[
+          if (!widget.isCorrect) ...[
             const SizedBox(height: 12),
             _RealAnswerRow(
               label: 'Correct Answer',
-              answer: correctAnswer,
+              answer: widget.correctAnswer,
               isCorrect: true,
             ),
+            const SizedBox(height: 16),
+            if (_explanation != null) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF9EE),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFFFEEBC)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.auto_awesome, color: Color(0xFFD18E15), size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Yapay Zeka Açıklaması',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF4A3C2A),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _explanation!,
+                      style: const TextStyle(
+                        color: Color(0xFF4A3C2A),
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (_isLoading) ...[
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFD18E15),
+                  ),
+                ),
+              ),
+            ] else ...[
+              if (_errorMessage != null) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Text(
+                    _errorMessage!,
+                    style: const TextStyle(color: Colors.red, fontSize: 13),
+                  ),
+                ),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _fetchExplanation,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFEEBC),
+                    foregroundColor: const Color(0xFFD18E15),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Color(0xFFFFD54F)),
+                    ),
+                  ),
+                  icon: const Icon(Icons.auto_awesome, size: 16),
+                  label: const Text(
+                    'Yapay Zekaya Sor ✨',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
           ],
         ],
       ),
@@ -306,16 +425,28 @@ class _RealAnswerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Color bgColor;
+    Color borderColor;
+    Color textColor;
+
+    if (isCorrect == true) {
+      bgColor = const Color(0xFFE8F5E9).withValues(alpha: 0.5);
+      borderColor = const Color(0xFFC8E6C9);
+      textColor = const Color(0xFF388E3C);
+    } else {
+      bgColor = const Color(0xFFFFEBEE).withValues(alpha: 0.5);
+      borderColor = const Color(0xFFFFCDD2);
+      textColor = const Color(0xFFD32F2F);
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: isCorrect
-            ? const Color(0xFFE8F5E9).withValues(alpha: 0.5)
-            : const Color(0xFFFFEBEE).withValues(alpha: 0.5),
+        color: bgColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isCorrect ? const Color(0xFFC8E6C9) : const Color(0xFFFFCDD2),
+          color: borderColor,
         ),
       ),
       child: Row(
@@ -327,7 +458,7 @@ class _RealAnswerRow extends StatelessWidget {
                 Text(
                   label,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: isCorrect ? const Color(0xFF388E3C) : const Color(0xFFD32F2F),
+                        color: textColor,
                         fontWeight: FontWeight.w600,
                       ),
                 ),

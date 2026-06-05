@@ -135,6 +135,7 @@ class AchievementStatus {
 
 class QuizOutcome {
   const QuizOutcome({
+    required this.quizId,
     required this.topic,
     required this.correctAnswers,
     required this.totalQuestions,
@@ -145,6 +146,7 @@ class QuizOutcome {
     required this.attemptCount,
   });
 
+  final String quizId;
   final Topic topic;
   final int correctAnswers;
   final int totalQuestions;

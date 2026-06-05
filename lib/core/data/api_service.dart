@@ -271,15 +271,17 @@ class ApiService {
     }
   }
 
-  Future<String> explainQuestion(String questionText, String selectedOptionText) async {
+
+  Future<String> explainQuestion(String quizId, String questionText, String selectedOptionText) async {
     debugPrint('[explainQuestion] Request URL: $baseUrl/api/quiz/explain-question');
     debugPrint('[explainQuestion] Request Headers: $_headers');
-    debugPrint('[explainQuestion] Request Body: questionText="$questionText", selectedOptionText="$selectedOptionText"');
+    debugPrint('[explainQuestion] Request Body: quizId="$quizId", questionText="$questionText", selectedOptionText="$selectedOptionText"');
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/quiz/explain-question'),
         headers: _headers,
         body: jsonEncode({
+          'quizId': quizId,
           'questionText': questionText,
           'selectedOptionText': selectedOptionText,
         }),
